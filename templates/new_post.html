@@ -7,19 +7,35 @@
 {% block body %}
 <h1>New Post</h1>
 
-    <hr>
-    <h2>Create New Blog Post:</h2>
-    <form action='/posts' method='POST'>
-        <label for="title">Title:</label>
-        <input class="form-control" type="text" name='title' id='title' placeholder="Enter Title" aria-label="Enter Title">
-        <br>
-        <label for="author">Author:</label>
-        <input class="form-control" type="text" name='author' id='author' placeholder="Enter Author" aria-label="Enter Author">
-        <br>
-        <label for="content">Post:</label>
-        <textarea class="form-control" name='content' id="content" placeholder="Enter Content" aria-label="Enter Content" rows="3"></textarea>
-        <br>
-        <input type='submit' value='Post'>
-    </form>
-    <hr>
+<hr>
+    <form action='/posts' method='POST' class="form-horizontal">
+  <div class="form-group">
+    <label for="title" class="col-sm-2 control-label">Title:</label>
+    <div class="col-sm-10">
+      <input type="text" class="form-control" id="title" name="title" placeholder="Enter Title" required>
+    </div>
+  </div>
+  <div class="form-group">
+    <label for="author" class="col-sm-2 control-label">Author:</label>
+    <div class="col-sm-10">
+	    <input type="text" class="form-control" name='author' id="author" placeholder="Enter Author" required>
+    </div>
+  </div>
+  <div class="form-group">
+    <label for="content" class="col-sm-2 control-label">Content:</label>
+    <div class="col-sm-10">
+        <textarea class="form-control" name='content' id="content" placeholder="Enter Content" aria-label="Enter Content" rows="3" required></textarea>
+    </div>
+  </div>
+  <div class="form-group">
+    <div class="col-sm-offset-2 col-sm-10">
+	    <button type="submit" class="btn btn-primary">Post</button>
+      <br>
+      <br>
+    </div>
+  </div>
+</form>
+
+<hr>
+
 {% endblock %}

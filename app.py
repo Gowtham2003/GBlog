@@ -1,4 +1,11 @@
-from flask import Flask ,render_template,request,redirect,session
+from flask import (
+        Flask ,
+        render_template,
+        request,
+        redirect,
+        session,
+        flash
+        )
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 
@@ -13,7 +20,8 @@ class BlogPost(db.Model):
     title = db.Column(db.String(100), nullable=False)
     content = db.Column(db.Text, nullable=False)
     author = db.Column(db.String(20), nullable=False, default='N/A')
-    date_posted = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    date_posted = db.Column(db.Date, nullable=False, default=datetime.now().date())
+    likes = db.Column(db.Integer,default=0)
 
     def __repr__(self):
             return 'Blog post ' + str(self.id)
@@ -48,38 +56,64 @@ def posts():
     else:
         all_posts = BlogPost.query.order_by(BlogPost.date_posted).all()
         if 'user' in session:
+            user = "Logged As " + session['user']
             isLogged = True
             if session['user'] == 'admin':
                 isAdmin = True
             else:
                 isAdmin = False
         else:
+            user = ""
             isLogged = False
 
 
-        return render_template('posts.html', posts=all_posts,isAdmin=isAdmin,isLogged=isLogged)
+        return render_template('posts.html', posts=all_posts,isAdmin=isAdmin,isLogged=isLogged,user=user)
 
 @app.route('/posts/delete/<int:id>')
 def delete(id):
-    post = BlogPost.query.get_or_404(id)
-    db.session.delete(post)
-    db.session.commit()
-    return redirect('/posts')
+    if 'user' in session:
+        user = "Logged As " + session['user']
+        isLogged = True
+        if session['user'] == 'admin':
+            isAdmin = True
+        else:
+            isAdmin = False
+    else:
+        isAdmin = False
+    if isAdmin:
+        post = BlogPost.query.get_or_404(id)
+        db.session.delete(post)
+        db.session.commit()
+        return redirect('/posts')
+    else:
+        return redirect('/posts')
 
 
 @app.route('/posts/edit/<int:id>', methods=['GET', 'POST'])
 def edit(id):
 
-    post = BlogPost.query.get_or_404(id)
-
-    if request.method == 'POST':
-        post.title = request.form['title']
-        post.author = request.form['author']
-        post.content = request.form['content']
-        db.session.commit()
-        return redirect('/posts')
+    if 'user' in session:
+        user = "Logged As " + session['user']
+        isLogged = True
+        if session['user'] == 'admin':
+            isAdmin = True
+        else:
+            isAdmin = False
     else:
-        return render_template('edit.html', post=post)
+        isAdmin = False
+    if isAdmin:
+        post = BlogPost.query.get_or_404(id)
+
+        if request.method == 'POST':
+            post.title = request.form['title']
+            post.author = request.form['author']
+            post.content = request.form['content']
+            db.session.commit()
+            return redirect('/posts')
+        else:
+            return render_template('edit.html', post=post)
+    else:
+        return redirect('/posts')
 
 @app.route('/login' , methods=['GET', 'POST'])
 def login():
@@ -92,7 +126,8 @@ def login():
 
             return redirect("/posts")
         else:
-            return render_template("login.html")
+            isError = True
+            return render_template("login.html",isError=isError)
 
     return render_template("login.html")
 
@@ -108,24 +143,58 @@ def valid(username,password):
 
 @app.route('/posts/new', methods=['GET', 'POST'])
 def new_post():
-    if request.method == 'POST':
-        post.title = request.form['title']
-        post.author = request.form['author']
-        post.content = request.form['content']
-        new_post = BlogPost(title=post_title, content=post_content, author=post_author)
-        db.session.add(new_post)
-        db.session.commit()
-        return redirect('/posts')
+    if 'user' in session:
+        user = "Logged As " + session['user']
+        isLogged = True
+        if session['user'] == 'admin':
+            isAdmin = True
+        else:
+            isAdmin = False
     else:
-        return render_template('new_post.html')
+        isAdmin = False
+
+    if isAdmin:
+        if request.method == 'POST':
+            post.title = request.form['title']
+            post.author = request.form['author']
+            post.content = request.form['content']
+            new_post = BlogPost(title=post_title, content=post_content, author=post_author)
+            db.session.add(new_post)
+            db.session.commit()
+            return redirect('/posts')
+        else:
+            return render_template('new_post.html')
+    else:
+        redirect('/posts')
 
 @app.route('/logout')
 def logout():
     session.pop('user',None)
     return redirect("/posts")
 
+@app.route('/posts/like/<int:id>')
+def like(id):
+    post = BlogPost.query.get_or_404(id)
+    post.likes+=1
+    db.session.commit()
+    return redirect('/posts')
 
+@app.route('/signup',methods=['GET','POST'])
+def signup():
 
+    if request.method == 'POST':
+        session.pop("user",None)
+        username = request.form['username']
+        password = request.form['password']
+        
+        usr = User(username=username,password=password)
+        db.session.add(usr)
+        db.session.commit()
+
+        print(User.query.all())
+        return redirect("/posts")
+
+    return render_template("signup.html")
 
 
 if __name__ == "__main__":
