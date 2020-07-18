@@ -8,9 +8,17 @@
 <br>
 
     <a href="/login" class='float-right'><button type="button" class="btn btn-primary">Login</button></a>
-<h1>SignUP</h1>
+<h1>Signup</h1>
 
     <hr>
+
+    {% if isError %}
+    <div class="alert alert-danger" role="alert">
+  <span class="glyphicon glyphicon-exclamation-sign" aria-hidden="true"></span>
+  <span class="sr-only">Error:</span>
+  Username Already Exists
+    </div>
+    {% endif %}
 
     <form action='/signup' method='POST' class="form-horizontal">
   <div class="form-group">

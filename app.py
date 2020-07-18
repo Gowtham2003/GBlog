@@ -6,7 +6,7 @@ from flask import (
         session,
         flash
         )
-from flask_sqlalchemy import SQLAlchemy
+from flask_sqlalchemy import SQLAlchemy,sqlalchemy
 from datetime import datetime
 
 app = Flask(__name__)
@@ -28,7 +28,7 @@ class BlogPost(db.Model):
 
 class User(db.Model):
     id = db.Column(db.Integer,primary_key=True)
-    username = db.Column(db.String(20),nullable=False)
+    username = db.Column(db.String(20),nullable=False,unique=True)
     password = db.Column(db.String(20),nullable=False)
     
     def __repr__(self):
@@ -42,45 +42,28 @@ def home():
 
 @app.route("/posts" , methods=['GET', 'POST'])
 def posts():
-    isAdmin = False
-    isLogged = False
     if request.method == 'POST':
         post_title = request.form['title']
         post_content = request.form['content']
         post_author = request.form['author']
-        new_post = BlogPost(title=post_title, content=post_content, author=post_author)
+        new_post = BlogPost(title=post_title, content=post_content, author=post_author,inSearchMode=False)
         db.session.add(new_post)
 
         db.session.commit()
         return redirect('/posts')
     else:
         all_posts = BlogPost.query.order_by(BlogPost.date_posted).all()
-        if 'user' in session:
+        if isLogged():
             user = "Logged As " + session['user']
-            isLogged = True
-            if session['user'] == 'admin':
-                isAdmin = True
-            else:
-                isAdmin = False
         else:
             user = ""
-            isLogged = False
 
 
-        return render_template('posts.html', posts=all_posts,isAdmin=isAdmin,isLogged=isLogged,user=user)
+        return render_template('posts.html', posts=all_posts,isAdmin=isAdmin(),isLogged=isLogged(),user=user)
 
 @app.route('/posts/delete/<int:id>')
 def delete(id):
-    if 'user' in session:
-        user = "Logged As " + session['user']
-        isLogged = True
-        if session['user'] == 'admin':
-            isAdmin = True
-        else:
-            isAdmin = False
-    else:
-        isAdmin = False
-    if isAdmin:
+    if isAdmin():
         post = BlogPost.query.get_or_404(id)
         db.session.delete(post)
         db.session.commit()
@@ -92,16 +75,7 @@ def delete(id):
 @app.route('/posts/edit/<int:id>', methods=['GET', 'POST'])
 def edit(id):
 
-    if 'user' in session:
-        user = "Logged As " + session['user']
-        isLogged = True
-        if session['user'] == 'admin':
-            isAdmin = True
-        else:
-            isAdmin = False
-    else:
-        isAdmin = False
-    if isAdmin:
+    if isAdmin():
         post = BlogPost.query.get_or_404(id)
 
         if request.method == 'POST':
@@ -117,15 +91,17 @@ def edit(id):
 
 @app.route('/login' , methods=['GET', 'POST'])
 def login():
+    isError = False
     if request.method == 'POST':
         session.pop("user",None)
-        username = request.form['username']
+        username = request.form['username'].lower()
         password = request.form['password']
         if valid(username,password):
             session['user'] = username
 
             return redirect("/posts")
         else:
+            #print(username + ' ' + password)
             isError = True
             return render_template("login.html",isError=isError)
 
@@ -133,27 +109,22 @@ def login():
 
 
 def valid(username,password):
+    isValid = False
     users = User.query.all()
     for user in users:
         if ( user.username == username) and (user.password ==password):
-            return True
+            isValid = True
+            return isValid
         else:
-            return False
+            #print(user.username + user.password)
+            isValid = False
+    return isValid
+            
 
 
 @app.route('/posts/new', methods=['GET', 'POST'])
 def new_post():
-    if 'user' in session:
-        user = "Logged As " + session['user']
-        isLogged = True
-        if session['user'] == 'admin':
-            isAdmin = True
-        else:
-            isAdmin = False
-    else:
-        isAdmin = False
-
-    if isAdmin:
+    if isAdmin():
         if request.method == 'POST':
             post.title = request.form['title']
             post.author = request.form['author']
@@ -165,7 +136,7 @@ def new_post():
         else:
             return render_template('new_post.html')
     else:
-        redirect('/posts')
+        return redirect('/posts')
 
 @app.route('/logout')
 def logout():
@@ -181,20 +152,73 @@ def like(id):
 
 @app.route('/signup',methods=['GET','POST'])
 def signup():
+    isError = False
 
     if request.method == 'POST':
         session.pop("user",None)
-        username = request.form['username']
+        username = request.form['username'].lower()
         password = request.form['password']
-        
         usr = User(username=username,password=password)
-        db.session.add(usr)
-        db.session.commit()
+        try:
+            isError = False
+            db.session.add(usr)
+            db.session.commit()
+            #print(User.query.all())
 
-        print(User.query.all())
-        return redirect("/posts")
+            session.pop("user",None)
+            session['user'] = username.lower()
+
+            return redirect("/posts")
+        except sqlalchemy.exc.IntegrityError:
+            isError = True
+            db.session.rollback()
+            return render_template("signup.html",isError=isError)
+
 
     return render_template("signup.html")
+
+@app.route("/search",methods=['GET','POST'])
+def search():
+    if request.method == 'POST':
+        searchQuery = request.form['search']
+        posts = BlogPost.query.order_by(BlogPost.date_posted).all()
+        final_posts = []
+        for post in posts:
+
+            if searchQuery in post.title:
+                final_posts.append(post)
+                #print(final_posts)
+                #print(str(posts.index(post)))
+        
+        if isLogged():
+            user = "Logged As " + session['user']
+        else:
+            user = ""
+
+
+        return render_template('posts.html', posts=final_posts,isAdmin=isAdmin(),isLogged=isLogged(),user=user,inSearchMode=True)
+
+
+
+    return redirect("/posts")
+
+
+def isLogged():
+
+    if 'user' in session:
+        return True
+    else:
+        return False
+
+def isAdmin():
+    if isLogged():
+        if session['user'] == 'admin':
+            return True
+        else:
+            return False
+    else:
+        return False
+
 
 
 if __name__ == "__main__":
