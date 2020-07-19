@@ -1,52 +1,56 @@
 from flask import (
-        Flask ,
-        render_template,
-        request,
-        redirect,
-        session,
-        flash
-        )
-from flask_sqlalchemy import SQLAlchemy,sqlalchemy
+    Flask,
+    render_template,
+    request,
+    redirect,
+    session,
+    flash
+)
+from flask_sqlalchemy import SQLAlchemy, sqlalchemy
 from datetime import datetime
 
 app = Flask(__name__)
-app.secret_key = "abc"  
+app.secret_key = "abc"
 
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///db_blog.db'
 db = SQLAlchemy(app)
+
 
 class BlogPost(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(100), nullable=False)
     content = db.Column(db.Text, nullable=False)
     author = db.Column(db.String(20), nullable=False, default='N/A')
-    date_posted = db.Column(db.Date, nullable=False, default=datetime.now().date())
-    likes = db.Column(db.Integer,default=0)
+    date_posted = db.Column(db.Date, nullable=False,
+                            default=datetime.now().date())
+    likes = db.Column(db.Integer, default=0)
 
     def __repr__(self):
-            return 'Blog post ' + str(self.id)
+        return 'Blog post ' + str(self.id)
+
 
 class User(db.Model):
-    id = db.Column(db.Integer,primary_key=True)
-    username = db.Column(db.String(20),nullable=False,unique=True)
-    password = db.Column(db.String(20),nullable=False)
-    
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(20), nullable=False, unique=True)
+    password = db.Column(db.String(20), nullable=False)
+
     def __repr__(self):
         return 'Username :' + str(self.id)
-    
 
 
 @app.route("/")
 def home():
     return render_template('index.html')
 
-@app.route("/posts" , methods=['GET', 'POST'])
+
+@app.route("/posts", methods=['GET', 'POST'])
 def posts():
     if request.method == 'POST':
         post_title = request.form['title']
         post_content = request.form['content']
         post_author = request.form['author']
-        new_post = BlogPost(title=post_title, content=post_content, author=post_author,inSearchMode=False)
+        new_post = BlogPost(title=post_title, content=post_content,
+                            author=post_author, inSearchMode=False)
         db.session.add(new_post)
 
         db.session.commit()
@@ -58,8 +62,9 @@ def posts():
         else:
             user = ""
 
+        return render_template('posts.html', posts=all_posts,
+                               isAdmin=isAdmin(), isLogged=isLogged(), user=user)
 
-        return render_template('posts.html', posts=all_posts,isAdmin=isAdmin(),isLogged=isLogged(),user=user)
 
 @app.route('/posts/delete/<int:id>')
 def delete(id):
@@ -89,37 +94,35 @@ def edit(id):
     else:
         return redirect('/posts')
 
-@app.route('/login' , methods=['GET', 'POST'])
+
+@app.route('/login', methods=['GET', 'POST'])
 def login():
     isError = False
     if request.method == 'POST':
-        session.pop("user",None)
+        session.pop("user", None)
         username = request.form['username'].lower()
         password = request.form['password']
-        if valid(username,password):
+        if valid(username, password):
             session['user'] = username
 
             return redirect("/posts")
         else:
-            #print(username + ' ' + password)
             isError = True
-            return render_template("login.html",isError=isError)
+            return render_template("login.html", isError=isError)
 
     return render_template("login.html")
 
 
-def valid(username,password):
+def valid(username, password):
     isValid = False
     users = User.query.all()
     for user in users:
-        if ( user.username == username) and (user.password ==password):
+        if (user.username == username) and (user.password == password):
             isValid = True
             return isValid
         else:
-            #print(user.username + user.password)
             isValid = False
     return isValid
-            
 
 
 @app.route('/posts/new', methods=['GET', 'POST'])
@@ -129,7 +132,8 @@ def new_post():
             post.title = request.form['title']
             post.author = request.form['author']
             post.content = request.form['content']
-            new_post = BlogPost(title=post_title, content=post_content, author=post_author)
+            new_post = BlogPost(
+                title=post_title, content=post_content, author=post_author)
             db.session.add(new_post)
             db.session.commit()
             return redirect('/posts')
@@ -138,46 +142,49 @@ def new_post():
     else:
         return redirect('/posts')
 
+
 @app.route('/logout')
 def logout():
-    session.pop('user',None)
+    session.pop('user', None)
     return redirect("/posts")
+
 
 @app.route('/posts/like/<int:id>')
 def like(id):
     post = BlogPost.query.get_or_404(id)
-    post.likes+=1
+    post.likes += 1
     db.session.commit()
     return redirect('/posts')
 
-@app.route('/signup',methods=['GET','POST'])
+
+@app.route('/signup', methods=['GET', 'POST'])
 def signup():
     isError = False
 
     if request.method == 'POST':
-        session.pop("user",None)
+        session.pop("user", None)
         username = request.form['username'].lower()
         password = request.form['password']
-        usr = User(username=username,password=password)
+        usr = User(username=username, password=password)
         try:
             isError = False
             db.session.add(usr)
             db.session.commit()
-            #print(User.query.all())
+            # print(User.query.all())
 
-            session.pop("user",None)
+            session.pop("user", None)
             session['user'] = username.lower()
 
             return redirect("/posts")
         except sqlalchemy.exc.IntegrityError:
             isError = True
             db.session.rollback()
-            return render_template("signup.html",isError=isError)
-
+            return render_template("signup.html", isError=isError)
 
     return render_template("signup.html")
 
-@app.route("/search",methods=['GET','POST'])
+
+@app.route("/search", methods=['GET', 'POST'])
 def search():
     if request.method == 'POST':
         searchQuery = request.form['search']
@@ -187,18 +194,16 @@ def search():
 
             if searchQuery in post.title:
                 final_posts.append(post)
-                #print(final_posts)
-                #print(str(posts.index(post)))
-        
+                # print(final_posts)
+                # print(str(posts.index(post)))
+
         if isLogged():
             user = "Logged As " + session['user']
         else:
             user = ""
 
-
-        return render_template('posts.html', posts=final_posts,isAdmin=isAdmin(),isLogged=isLogged(),user=user,inSearchMode=True)
-
-
+        return render_template('posts.html',
+                               posts=final_posts, isAdmin=isAdmin(), isLogged=isLogged(), user=user, inSearchMode=True)
 
     return redirect("/posts")
 
@@ -210,6 +215,7 @@ def isLogged():
     else:
         return False
 
+
 def isAdmin():
     if isLogged():
         if session['user'] == 'admin':
@@ -218,7 +224,6 @@ def isAdmin():
             return False
     else:
         return False
-
 
 
 if __name__ == "__main__":
