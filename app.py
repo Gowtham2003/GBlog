@@ -6,43 +6,39 @@ from flask import (
     session,
     flash
 )
-from flask_sqlalchemy import SQLAlchemy, sqlalchemy
 from datetime import datetime
-
+from flask_mongoengine import MongoEngine
 app = Flask(__name__)
 app.secret_key = "abc"
 
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///db_blog.db'
-db = SQLAlchemy(app)
+app.config['MONGODB_DB'] = 'project1'
+
+db = MongoEngine()
+db.init_app(app)
 
 
-class BlogPost(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(100), nullable=False)
-    content = db.Column(db.Text, nullable=False)
-    author = db.Column(db.String(20), nullable=False, default='N/A')
-    date_posted = db.Column(db.Date, nullable=False,
-                            default=datetime.now().date())
-    likes = db.Column(db.Integer, default=0)
+
+class BlogPost(db.Document):
+    title = db.StringField(max_length=120, required=True)
+    author = db.StringField(max_length=20)
+    content = db.StringField()
+    tags = db.ListField(db.StringField(max_length=30))
+    likes = db.IntField(default=0)
+    date_posted = db.DateTimeField(required=True,default=datetime.now().date())
+    def __repr__(self):
+        return 'Blog post ' + self.title
+
+class User(db.Document):
+    username = db.StringField(max_length=50)
+    password = db.StringField(max_length=50)
 
     def __repr__(self):
-        return 'Blog post ' + str(self.id)
-
-
-class User(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(20), nullable=False, unique=True)
-    password = db.Column(db.String(20), nullable=False)
-
-    def __repr__(self):
-        return 'Username :' + str(self.id)
-
+        return 'Username :' + self.username
 
 
 @app.route("/")
 def home():
     return render_template('index.html')
-
 
 @app.route("/posts", methods=['GET', 'POST'])
 def posts():
@@ -51,44 +47,42 @@ def posts():
         post_content = request.form['content']
         post_author = request.form['author']
         new_post = BlogPost(title=post_title, content=post_content,
-                            author=post_author, inSearchMode=False)
-        db.session.add(new_post)
+                            author=post_author)
+        new_post.save()
 
-        db.session.commit()
         return redirect('/posts')
     else:
-        all_posts = BlogPost.query.order_by(BlogPost.date_posted).all()
+        all_posts = BlogPost.objects
         if isLogged():
             user = "Logged As " + session['user']
         else:
             user = ""
 
         return render_template('posts.html', posts=all_posts,
-                               isAdmin=isAdmin(), isLogged=isLogged(), user=user)
+                               isAdmin=isAdmin(), isLogged=isLogged(), user=user, inSearchMode=False)
 
-
-@app.route('/posts/delete/<int:id>')
+@app.route('/posts/delete/<string:id>')
 def delete(id):
     if isAdmin():
-        post = BlogPost.query.get_or_404(id)
-        db.session.delete(post)
-        db.session.commit()
+        post = BlogPost.objects.get_or_404(pk=id)
+        BlogPost.delete(post)
+        
         return redirect('/posts')
     else:
         return redirect('/posts')
 
 
-@app.route('/posts/edit/<int:id>', methods=['GET', 'POST'])
+@app.route('/posts/edit/<string:id>', methods=['GET', 'POST'])
 def edit(id):
 
     if isAdmin():
-        post = BlogPost.query.get_or_404(id)
+        post = BlogPost.objects.get_or_404(pk=id)
 
         if request.method == 'POST':
             post.title = request.form['title']
             post.author = request.form['author']
             post.content = request.form['content']
-            db.session.commit()
+            post.save()
             return redirect('/posts')
         else:
             return render_template('edit.html', post=post)
@@ -116,7 +110,7 @@ def login():
 
 def valid(username, password):
     isValid = False
-    users = User.query.all()
+    users = User.objects
     for user in users:
         if (user.username == username) and (user.password == password):
             isValid = True
@@ -124,7 +118,6 @@ def valid(username, password):
         else:
             isValid = False
     return isValid
-
 
 @app.route('/posts/new', methods=['GET', 'POST'])
 def new_post():
@@ -143,18 +136,17 @@ def new_post():
     else:
         return redirect('/posts')
 
-
 @app.route('/logout')
 def logout():
     session.pop('user', None)
     return redirect("/posts")
 
 
-@app.route('/posts/like/<int:id>')
+@app.route('/posts/like/<string:id>')
 def like(id):
-    post = BlogPost.query.get_or_404(id)
+    post = BlogPost.objects.get_or_404(pk=id)
     post.likes += 1
-    db.session.commit()
+    post.save()
     return redirect('/posts')
 
 
@@ -169,17 +161,15 @@ def signup():
         usr = User(username=username, password=password)
         try:
             isError = False
-            db.session.add(usr)
-            db.session.commit()
-            # print(User.query.all())
+            usr.save()
 
             session.pop("user", None)
             session['user'] = username.lower()
 
             return redirect("/posts")
-        except sqlalchemy.exc.IntegrityError:
+        except Exception as e:
+            print(e)
             isError = True
-            db.session.rollback()
             return render_template("signup.html", isError=isError)
 
     return render_template("signup.html")
@@ -225,7 +215,6 @@ def isAdmin():
             return False
     else:
         return False
-
 
 if __name__ == "__main__":
     app.debug = True
