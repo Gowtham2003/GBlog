@@ -15,7 +15,6 @@ app.secret_key = "abc"
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///db_blog.db'
 db = SQLAlchemy(app)
 
-
 class BlogPost(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(100), nullable=False)
@@ -51,7 +50,7 @@ def posts():
         post_content = request.form['content']
         post_author = request.form['author']
         new_post = BlogPost(title=post_title, content=post_content,
-                            author=post_author, inSearchMode=False)
+                            author=post_author)
         db.session.add(new_post)
 
         db.session.commit()
@@ -64,7 +63,7 @@ def posts():
             user = ""
 
         return render_template('posts.html', posts=all_posts,
-                               isAdmin=isAdmin(), isLogged=isLogged(), user=user)
+                               isAdmin=isAdmin(), isLogged=isLogged(), user=user,inSearchMode=False)
 
 
 @app.route('/posts/delete/<int:id>')
@@ -228,4 +227,5 @@ def isAdmin():
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.debug = True
+    app.run(host='0.0.0.0', port=5000, use_reloader=True)
