@@ -11,33 +11,35 @@ from flask_mongoengine import MongoEngine
 app = Flask(__name__)
 app.secret_key = "abc"
 
-app.config['MONGODB_DB'] = 'project1'
-
+# app.config['MONGODB_DB'] = 'project1'
+app.config['MONGODB_HOST'] = "mongodb+srv://dbUser:yByL4yvuJbV0TZZV@cluster0.klfgq.gcp.mongodb.net/db?retryWrites=true&w=majority"
 db = MongoEngine()
 db.init_app(app)
 
+currentUser = {}
 
+class User(db.Document):
+    username = db.StringField(max_length=50)
+    password = db.StringField(max_length=50)
+    liked_posts = db.ListField(db.ReferenceField('BlogPost'))
+
+    def __repr__(self):
+        return 'Username :' + self.username
 
 class BlogPost(db.Document):
     title = db.StringField(max_length=120, required=True)
     author = db.StringField(max_length=20)
     content = db.StringField()
     tags = db.ListField(db.StringField(max_length=30))
-    likes = db.IntField(default=0)
+    likes  = db.ListField(db.ReferenceField(User))
     date_posted = db.DateTimeField(required=True,default=datetime.now().date())
     def __repr__(self):
         return 'Blog post ' + self.title
 
-class User(db.Document):
-    username = db.StringField(max_length=50)
-    password = db.StringField(max_length=50)
-
-    def __repr__(self):
-        return 'Username :' + self.username
-
 
 @app.route("/")
 def home():
+    print(currentUser)
     return render_template('index.html')
 
 @app.route("/posts", methods=['GET', 'POST'])
@@ -58,8 +60,7 @@ def posts():
         else:
             user = ""
 
-        return render_template('posts.html', posts=all_posts,
-                               isAdmin=isAdmin(), isLogged=isLogged(), user=user, inSearchMode=False)
+        return render_template('posts.html', posts=all_posts,isAdmin=isAdmin(),likes=len(post.likes) for post in all_posts, isLogged=isLogged(), user=user, inSearchMode=False)
 
 @app.route('/posts/delete/<string:id>')
 def delete(id):
@@ -113,6 +114,7 @@ def valid(username, password):
     users = User.objects
     for user in users:
         if (user.username == username) and (user.password == password):
+            setUser(user.id,user.username)
             isValid = True
             return isValid
         else:
@@ -145,7 +147,7 @@ def logout():
 @app.route('/posts/like/<string:id>')
 def like(id):
     post = BlogPost.objects.get_or_404(pk=id)
-    post.likes += 1
+    post.likes.append(currentUser["_id"])
     post.save()
     return redirect('/posts')
 
@@ -162,9 +164,9 @@ def signup():
         try:
             isError = False
             usr.save()
-
             session.pop("user", None)
             session['user'] = username.lower()
+            setUser(usr.id,usr.username)
 
             return redirect("/posts")
         except Exception as e:
@@ -216,6 +218,14 @@ def isAdmin():
     else:
         return False
 
+def setUser(_id,username):
+    global currentUser
+    currentUser = {
+            "_id":_id,
+            "username":username,
+            "isLogged":isLogged(),
+            "isAdmin":isAdmin()
+            }
 if __name__ == "__main__":
     app.debug = True
     app.run(host='0.0.0.0', port=5000, use_reloader=True)
